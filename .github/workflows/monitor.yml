@@ -1,0 +1,80 @@
+name: Zerobounce Auto Monitoring
+
+on:
+  schedule:
+    - cron: "0 * * * *"   # har 1 ghante
+  workflow_dispatch:
+
+jobs:
+  recon:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v4
+
+    - name: Install tools
+      run: |
+        sudo apt update
+        sudo apt install -y golang git curl
+        go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+        go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+        go install github.com/projectdiscovery/katana/cmd/katana@latest
+        go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest
+        go install github.com/projectdiscovery/notify/cmd/notify@latest
+        export PATH=$PATH:$(go env GOPATH)/bin
+
+    - name: Create folders
+      run: |
+        mkdir -p data new
+
+    # 🔎 Live endpoints
+    - name: httpx scan
+      run: |
+        httpx -l targets.txt -silent > new/httpx_new.txt || true
+
+    # 🧪 nuclei templates (sirf safe)
+    - name: nuclei scan
+      run: |
+        nuclei -l new/httpx_new.txt -severity low,medium,high,critical -silent > new/nuclei_new.txt || true
+
+    # 🧠 JS discovery (katana)
+    - name: JS discovery
+      run: |
+        katana -list targets.txt -js -silent > new/js_new.txt || true
+
+    # 🔄 Compare + Notify
+    - name: Compare & Telegram Alert
+      env:
+        BOT: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        CHAT: ${{ secrets.TELEGRAM_CHAT_ID }}
+      run: |
+        touch data/httpx_old.txt data/nuclei_old.txt data/js_old.txt
+
+        diff_httpx=$(diff data/httpx_old.txt new/httpx_new.txt || true)
+        diff_nuclei=$(diff data/nuclei_old.txt new/nuclei_new.txt || true)
+        diff_js=$(diff data/js_old.txt new/js_new.txt || true)
+
+        if [ -n "$diff_httpx$diff_nuclei$diff_js" ]; then
+          MSG="🚨 Zerobounce Change Detected 🚨%0A"
+
+          [ -n "$diff_httpx" ] && MSG="${MSG}%0A🌐 New/Changed Endpoints"
+          [ -n "$diff_nuclei" ] && MSG="${MSG}%0A🧪 New Nuclei Findings"
+          [ -n "$diff_js" ] && MSG="${MSG}%0A📜 JS Changes Detected"
+
+          curl -s -X POST "https://api.telegram.org/bot$BOT/sendMessage" \
+            -d chat_id="$CHAT" \
+            -d text="$MSG"
+        fi
+
+        mv new/httpx_new.txt data/httpx_old.txt
+        mv new/nuclei_new.txt data/nuclei_old.txt
+        mv new/js_new.txt data/js_old.txt
+
+    - name: Commit updated data
+      run: |
+        git config --global user.email "bot@github.com"
+        git config --global user.name "monitor-bot"
+        git add data/*
+        git commit -m "auto: update monitoring data" || echo "No changes"
+        git push
