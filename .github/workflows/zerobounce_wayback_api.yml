@@ -20,7 +20,7 @@ jobs:
         go install github.com/tomnomnom/waybackurls@latest
         go install github.com/lc/gau/v2/cmd/gau@latest
         go install github.com/projectdiscovery/httpx/cmd/httpx@latest
-        export PATH=$PATH:~/go/bin
+        echo "$HOME/go/bin" >> $GITHUB_PATH
 
     - name: Collect OLD URLs (Wayback + GAU)
       run: |
@@ -65,3 +65,4 @@ jobs:
         git add data/old_alive.txt
         git commit -m "update zerobounce old api history" || true
         git push
+
