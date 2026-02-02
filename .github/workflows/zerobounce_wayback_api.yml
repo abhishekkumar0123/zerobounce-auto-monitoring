@@ -20,38 +20,53 @@ jobs:
 
     - name: Install Go Tools
       run: |
-        echo "Installing Go tools..."
-        go install github.com/tomnomnom/waybackurls@latest
-        go install github.com/lc/gau/v2/cmd/gau@latest
-        go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+        # Set explicit GOBIN to ensure predictable location
+        export GOBIN="$HOME/go/bin"
+        mkdir -p "$GOBIN"
         
-        # Explicitly add Go bin paths to GITHUB_PATH for all subsequent steps
-        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-        echo "$HOME/go/bin" >> $GITHUB_PATH
-        
-        # Verify installation
-        echo "Verifying installations..."
+        echo "Installing Go tools to: $GOBIN"
         echo "GOPATH: $(go env GOPATH)"
-        GOPATH_BIN="$(go env GOPATH)/bin"
-        HOME_BIN="$HOME/go/bin"
-        echo "Checking $GOPATH_BIN..."
-        ls -la "$GOPATH_BIN" 2>/dev/null | grep -E "waybackurls|gau|httpx" || true
-        echo "Checking $HOME_BIN..."
-        ls -la "$HOME_BIN" 2>/dev/null | grep -E "waybackurls|gau|httpx" || true
+        echo "GOBIN: $GOBIN"
         
-        # Test if tools are accessible
-        export PATH=$PATH:$GOPATH_BIN:$HOME_BIN
-        which waybackurls && echo "✓ waybackurls found" || echo "✗ waybackurls not found"
-        which gau && echo "✓ gau found" || echo "✗ gau not found"
-        which httpx && echo "✓ httpx found" || echo "✗ httpx not found"
+        # Install tools with explicit GOBIN
+        go install github.com/tomnomnom/waybackurls@latest || { echo "waybackurls installation failed"; exit 1; }
+        go install github.com/lc/gau/v2/cmd/gau@latest || { echo "gau installation failed"; exit 1; }
+        go install github.com/projectdiscovery/httpx/cmd/httpx@latest || { echo "httpx installation failed"; exit 1; }
+        echo "All tools installed successfully"
+        
+        # Verify tools exist
+        echo "Verifying installed tools..."
+        ls -la "$GOBIN" | grep -E "waybackurls|gau|httpx" || { echo "ERROR: Tools not found in $GOBIN"; exit 1; }
+        
+        # Test tools
+        "$GOBIN/waybackurls" --version || { echo "waybackurls test failed"; exit 1; }
+        "$GOBIN/gau" --version || { echo "gau test failed"; exit 1; }
+        "$GOBIN/httpx" -version || { echo "httpx test failed"; exit 1; }
+        
+        # Add to PATH for all steps
+        echo "$GOBIN" >> $GITHUB_PATH
+        echo "GO_BIN=$GOBIN" >> $GITHUB_ENV
+        echo "✓ Tools ready at: $GOBIN"
 
     - name: Collect OLD URLs (Wayback + GAU)
       run: |
         mkdir -p data
-        # Ensure PATH includes Go bin
-        export PATH=$PATH:$(go env GOPATH)/bin:$HOME/go/bin
-        echo "zerobounce.net" | waybackurls > data/all.txt
-        gau zerobounce.net >> data/all.txt
+        # Use full paths to ensure tools are found
+        GO_BIN="${GO_BIN:-$HOME/go/bin}"
+        if [ ! -f "$GO_BIN/waybackurls" ]; then
+          GO_BIN="$(go env GOPATH)/bin"
+        fi
+        if [ ! -f "$GO_BIN/waybackurls" ] || [ ! -f "$GO_BIN/gau" ]; then
+          echo "ERROR: Tools not found! Checking locations..."
+          echo "GO_BIN: $GO_BIN"
+          ls -la "$GO_BIN" || echo "Directory doesn't exist"
+          ls -la "$HOME/go/bin" || echo "HOME/go/bin doesn't exist"
+          ls -la "$(go env GOPATH)/bin" || echo "GOPATH/bin doesn't exist"
+          exit 1
+        fi
+        echo "Using GO_BIN: $GO_BIN"
+        echo "zerobounce.net" | "$GO_BIN/waybackurls" > data/all.txt
+        "$GO_BIN/gau" zerobounce.net >> data/all.txt
         sort -u data/all.txt > data/urls.txt
 
     - name: Filter API & sensitive endpoints
@@ -60,10 +75,18 @@ jobs:
 
     - name: Alive check with httpx
       run: |
-        # Ensure PATH includes Go bin
-        export PATH=$PATH:$(go env GOPATH)/bin:$HOME/go/bin
+        # Use full path to httpx
+        GO_BIN="${GO_BIN:-$HOME/go/bin}"
+        if [ ! -f "$GO_BIN/httpx" ]; then
+          GO_BIN="$(go env GOPATH)/bin"
+        fi
+        if [ ! -f "$GO_BIN/httpx" ]; then
+          echo "ERROR: httpx not found in $GO_BIN"
+          ls -la "$GO_BIN" || echo "Directory doesn't exist"
+          exit 1
+        fi
         if [ -s data/api.txt ]; then
-          cat data/api.txt | httpx -silent -mc 200,401,403 > data/alive.txt || true
+          cat data/api.txt | "$GO_BIN/httpx" -silent -mc 200,401,403 > data/alive.txt || true
         else
           touch data/alive.txt
         fi
