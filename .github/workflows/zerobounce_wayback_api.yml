@@ -50,17 +50,28 @@ jobs:
 
     - name: Collect OLD URLs (Wayback + GAU)
       run: |
+        set -e
         mkdir -p data
-        TOOLS="${TOOLS_BIN:-$HOME/go/bin}"
-        if [ ! -f "$TOOLS/waybackurls" ]; then
-          TOOLS="$(go env GOPATH)/bin"
-        fi
-        if [ ! -f "$TOOLS/waybackurls" ] || [ ! -f "$TOOLS/gau" ]; then
-          echo "ERROR: Tools not found in $TOOLS"
+        # Find tools with absolute paths - NO RELYING ON PATH
+        if [ -f "$HOME/go/bin/waybackurls" ]; then
+          WAYBACK="$HOME/go/bin/waybackurls"
+          GAU="$HOME/go/bin/gau"
+        elif [ -f "$(go env GOPATH)/bin/waybackurls" ]; then
+          WAYBACK="$(go env GOPATH)/bin/waybackurls"
+          GAU="$(go env GOPATH)/bin/gau"
+        else
+          echo "ERROR: Tools not found!"
+          ls -la "$HOME/go/bin/" 2>/dev/null || echo "HOME/go/bin not found"
+          ls -la "$(go env GOPATH)/bin/" 2>/dev/null || echo "GOPATH/bin not found"
           exit 1
         fi
-        echo "zerobounce.net" | "$TOOLS/waybackurls" > data/all.txt
-        "$TOOLS/gau" zerobounce.net >> data/all.txt
+        echo "Using waybackurls: $WAYBACK"
+        echo "Using gau: $GAU"
+        # Test tools exist and are executable
+        [ -x "$WAYBACK" ] || { echo "waybackurls not executable"; exit 1; }
+        [ -x "$GAU" ] || { echo "gau not executable"; exit 1; }
+        echo "zerobounce.net" | "$WAYBACK" > data/all.txt
+        "$GAU" zerobounce.net >> data/all.txt
         sort -u data/all.txt > data/urls.txt
 
     - name: Filter API & sensitive endpoints
@@ -69,16 +80,23 @@ jobs:
 
     - name: Alive check with httpx
       run: |
-        TOOLS="${TOOLS_BIN:-$HOME/go/bin}"
-        if [ ! -f "$TOOLS/httpx" ]; then
-          TOOLS="$(go env GOPATH)/bin"
-        fi
-        if [ ! -f "$TOOLS/httpx" ]; then
-          echo "ERROR: httpx not found in $TOOLS"
+        set -e
+        # Find httpx with absolute path - NO RELYING ON PATH
+        if [ -f "$HOME/go/bin/httpx" ]; then
+          HTTPX="$HOME/go/bin/httpx"
+        elif [ -f "$(go env GOPATH)/bin/httpx" ]; then
+          HTTPX="$(go env GOPATH)/bin/httpx"
+        else
+          echo "ERROR: httpx not found!"
+          ls -la "$HOME/go/bin/" 2>/dev/null || echo "HOME/go/bin not found"
+          ls -la "$(go env GOPATH)/bin/" 2>/dev/null || echo "GOPATH/bin not found"
           exit 1
         fi
+        echo "Using httpx: $HTTPX"
+        # Test httpx exists and is executable
+        [ -x "$HTTPX" ] || { echo "httpx not executable"; exit 1; }
         if [ -s data/api.txt ]; then
-          cat data/api.txt | "$TOOLS/httpx" -silent -mc 200,401,403 > data/alive.txt || true
+          cat data/api.txt | "$HTTPX" -silent -mc 200,401,403 > data/alive.txt || true
         else
           touch data/alive.txt
         fi
