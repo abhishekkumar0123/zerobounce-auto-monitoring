@@ -16,86 +16,57 @@ jobs:
     - name: Download Tools
       run: |
         set -e
-        TOOLS_DIR="$HOME/tools"
-        mkdir -p "$TOOLS_DIR"
-        cd "$TOOLS_DIR"
+        mkdir -p $HOME/tools
+        cd $HOME/tools
         
-        echo "Tools directory: $TOOLS_DIR"
+        echo "=== Downloading waybackurls ==="
+        curl -L -f -o $HOME/tools/waybackurls https://github.com/tomnomnom/waybackurls/releases/latest/download/waybackurls-linux-amd64 || curl -L -f -o $HOME/tools/waybackurls https://github.com/tomnomnom/waybackurls/releases/download/v0.1.0/waybackurls-linux-amd64
+        chmod +x $HOME/tools/waybackurls
+        ls -lh $HOME/tools/waybackurls
         
-        # Download waybackurls
-        echo "Downloading waybackurls..."
-        curl -L -f -o waybackurls https://github.com/tomnomnom/waybackurls/releases/latest/download/waybackurls-linux-amd64 || {
-          echo "Trying alternative URL..."
-          curl -L -f -o waybackurls https://github.com/tomnomnom/waybackurls/releases/download/v0.1.0/waybackurls-linux-amd64
-        }
-        chmod +x waybackurls
-        echo "waybackurls downloaded: $(ls -lh waybackurls)"
-        
-        # Download gau
-        echo "Downloading gau..."
-        curl -L -f -o gau.tar.gz https://github.com/lc/gau/releases/download/v2.1.2/gau_2.1.2_linux_amd64.tar.gz || {
-          echo "Trying latest release..."
+        echo "=== Downloading gau ==="
+        curl -L -f -o $HOME/tools/gau.tar.gz https://github.com/lc/gau/releases/download/v2.1.2/gau_2.1.2_linux_amd64.tar.gz || {
           GAU_URL=$(curl -s https://api.github.com/repos/lc/gau/releases/latest | grep "browser_download_url.*linux_amd64.tar.gz" | head -1 | cut -d '"' -f 4)
-          curl -L -f -o gau.tar.gz "$GAU_URL"
+          curl -L -f -o $HOME/tools/gau.tar.gz "$GAU_URL"
         }
-        tar -xzf gau.tar.gz
-        chmod +x gau
-        rm -f gau.tar.gz
-        echo "gau downloaded: $(ls -lh gau)"
+        tar -xzf $HOME/tools/gau.tar.gz -C $HOME/tools
+        chmod +x $HOME/tools/gau
+        rm -f $HOME/tools/gau.tar.gz
+        ls -lh $HOME/tools/gau
         
-        # Download httpx
-        echo "Downloading httpx..."
-        curl -L -f -o httpx.zip https://github.com/projectdiscovery/httpx/releases/download/v1.3.7/httpx_1.3.7_linux_amd64.zip || {
-          echo "Trying latest release..."
+        echo "=== Downloading httpx ==="
+        curl -L -f -o $HOME/tools/httpx.zip https://github.com/projectdiscovery/httpx/releases/download/v1.3.7/httpx_1.3.7_linux_amd64.zip || {
           HTTPX_URL=$(curl -s https://api.github.com/repos/projectdiscovery/httpx/releases/latest | grep "browser_download_url.*linux_amd64.zip" | head -1 | cut -d '"' -f 4)
-          curl -L -f -o httpx.zip "$HTTPX_URL"
+          curl -L -f -o $HOME/tools/httpx.zip "$HTTPX_URL"
         }
-        unzip -q httpx.zip
-        chmod +x httpx
-        rm -f httpx.zip
-        echo "httpx downloaded: $(ls -lh httpx)"
+        unzip -q $HOME/tools/httpx.zip -d $HOME/tools
+        chmod +x $HOME/tools/httpx
+        rm -f $HOME/tools/httpx.zip
+        ls -lh $HOME/tools/httpx
         
-        # Verify all tools
-        echo "Verifying tools..."
-        [ -f "$TOOLS_DIR/waybackurls" ] && [ -x "$TOOLS_DIR/waybackurls" ] || { echo "ERROR: waybackurls check failed"; ls -la "$TOOLS_DIR"; exit 1; }
-        [ -f "$TOOLS_DIR/gau" ] && [ -x "$TOOLS_DIR/gau" ] || { echo "ERROR: gau check failed"; ls -la "$TOOLS_DIR"; exit 1; }
-        [ -f "$TOOLS_DIR/httpx" ] && [ -x "$TOOLS_DIR/httpx" ] || { echo "ERROR: httpx check failed"; ls -la "$TOOLS_DIR"; exit 1; }
+        echo "=== Verifying all tools ==="
+        $HOME/tools/waybackurls --version || echo "waybackurls version"
+        $HOME/tools/gau --version || echo "gau version"
+        $HOME/tools/httpx -version || echo "httpx version"
         
-        echo "All tools verified!"
-        echo "TOOLS_DIR=$TOOLS_DIR" >> $GITHUB_ENV
+        echo "$HOME/tools" >> $GITHUB_PATH
 
     - name: Collect OLD URLs (Wayback + GAU)
       run: |
         set -e
         mkdir -p data
         
-        TOOLS_DIR="${TOOLS_DIR:-$HOME/tools}"
-        WAYBACK="$TOOLS_DIR/waybackurls"
-        GAU="$TOOLS_DIR/gau"
+        echo "=== Checking tools ==="
+        ls -lh $HOME/tools/waybackurls || { echo "ERROR: waybackurls not found"; exit 1; }
+        ls -lh $HOME/tools/gau || { echo "ERROR: gau not found"; exit 1; }
         
-        echo "Tools directory: $TOOLS_DIR"
-        echo "Looking for waybackurls at: $WAYBACK"
-        echo "Looking for gau at: $GAU"
+        echo "=== Running waybackurls ==="
+        echo "zerobounce.net" | $HOME/tools/waybackurls > data/all.txt
         
-        # Verify tools exist
-        if [ ! -f "$WAYBACK" ] || [ ! -x "$WAYBACK" ]; then
-          echo "ERROR: waybackurls not found at $WAYBACK"
-          ls -la "$TOOLS_DIR" 2>/dev/null || echo "Directory doesn't exist"
-          find "$HOME" -name "waybackurls" 2>/dev/null || echo "waybackurls not found anywhere"
-          exit 1
-        fi
+        echo "=== Running gau ==="
+        $HOME/tools/gau zerobounce.net >> data/all.txt
         
-        if [ ! -f "$GAU" ] || [ ! -x "$GAU" ]; then
-          echo "ERROR: gau not found at $GAU"
-          ls -la "$TOOLS_DIR" 2>/dev/null || echo "Directory doesn't exist"
-          exit 1
-        fi
-        
-        echo "Using waybackurls: $WAYBACK"
-        echo "Using gau: $GAU"
-        
-        echo "zerobounce.net" | "$WAYBACK" > data/all.txt || { echo "waybackurls command failed"; exit 1; }
-        "$GAU" zerobounce.net >> data/all.txt || { echo "gau command failed"; exit 1; }
+        echo "=== Sorting results ==="
         sort -u data/all.txt > data/urls.txt
 
     - name: Filter API & sensitive endpoints
@@ -105,21 +76,12 @@ jobs:
     - name: Alive check with httpx
       run: |
         set -e
-        TOOLS_DIR="${TOOLS_DIR:-$HOME/tools}"
-        HTTPX="$TOOLS_DIR/httpx"
-        
-        echo "Looking for httpx at: $HTTPX"
-        
-        if [ ! -f "$HTTPX" ] || [ ! -x "$HTTPX" ]; then
-          echo "ERROR: httpx not found at $HTTPX"
-          ls -la "$TOOLS_DIR" 2>/dev/null || echo "Directory doesn't exist"
-          exit 1
-        fi
-        
-        echo "Using httpx: $HTTPX"
+        echo "=== Checking httpx ==="
+        ls -lh $HOME/tools/httpx || { echo "ERROR: httpx not found"; exit 1; }
         
         if [ -s data/api.txt ]; then
-          cat data/api.txt | "$HTTPX" -silent -mc 200,401,403 > data/alive.txt || true
+          echo "=== Running httpx ==="
+          cat data/api.txt | $HOME/tools/httpx -silent -mc 200,401,403 > data/alive.txt || true
         else
           touch data/alive.txt
         fi
