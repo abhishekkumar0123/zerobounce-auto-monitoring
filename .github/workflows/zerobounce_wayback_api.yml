@@ -16,65 +16,86 @@ jobs:
     - name: Download Tools
       run: |
         set -e
-        mkdir -p /tmp/tools
-        cd /tmp/tools
+        TOOLS_DIR="$HOME/tools"
+        mkdir -p "$TOOLS_DIR"
+        cd "$TOOLS_DIR"
+        
+        echo "Tools directory: $TOOLS_DIR"
         
         # Download waybackurls
         echo "Downloading waybackurls..."
         curl -L -f -o waybackurls https://github.com/tomnomnom/waybackurls/releases/latest/download/waybackurls-linux-amd64 || {
-          echo "Failed to download waybackurls, trying alternative..."
+          echo "Trying alternative URL..."
           curl -L -f -o waybackurls https://github.com/tomnomnom/waybackurls/releases/download/v0.1.0/waybackurls-linux-amd64
         }
         chmod +x waybackurls
-        ls -la waybackurls
+        echo "waybackurls downloaded: $(ls -lh waybackurls)"
         
-        # Download gau - use direct URL
+        # Download gau
         echo "Downloading gau..."
         curl -L -f -o gau.tar.gz https://github.com/lc/gau/releases/download/v2.1.2/gau_2.1.2_linux_amd64.tar.gz || {
+          echo "Trying latest release..."
           GAU_URL=$(curl -s https://api.github.com/repos/lc/gau/releases/latest | grep "browser_download_url.*linux_amd64.tar.gz" | head -1 | cut -d '"' -f 4)
           curl -L -f -o gau.tar.gz "$GAU_URL"
         }
         tar -xzf gau.tar.gz
         chmod +x gau
         rm -f gau.tar.gz
-        ls -la gau
+        echo "gau downloaded: $(ls -lh gau)"
         
-        # Download httpx - use direct URL
+        # Download httpx
         echo "Downloading httpx..."
         curl -L -f -o httpx.zip https://github.com/projectdiscovery/httpx/releases/download/v1.3.7/httpx_1.3.7_linux_amd64.zip || {
+          echo "Trying latest release..."
           HTTPX_URL=$(curl -s https://api.github.com/repos/projectdiscovery/httpx/releases/latest | grep "browser_download_url.*linux_amd64.zip" | head -1 | cut -d '"' -f 4)
           curl -L -f -o httpx.zip "$HTTPX_URL"
         }
         unzip -q httpx.zip
         chmod +x httpx
         rm -f httpx.zip
-        ls -la httpx
+        echo "httpx downloaded: $(ls -lh httpx)"
         
-        # Verify tools exist and are executable
+        # Verify all tools
         echo "Verifying tools..."
-        [ -f /tmp/tools/waybackurls ] && [ -x /tmp/tools/waybackurls ] || { echo "ERROR: waybackurls not found or not executable"; exit 1; }
-        [ -f /tmp/tools/gau ] && [ -x /tmp/tools/gau ] || { echo "ERROR: gau not found or not executable"; exit 1; }
-        [ -f /tmp/tools/httpx ] && [ -x /tmp/tools/httpx ] || { echo "ERROR: httpx not found or not executable"; exit 1; }
+        [ -f "$TOOLS_DIR/waybackurls" ] && [ -x "$TOOLS_DIR/waybackurls" ] || { echo "ERROR: waybackurls check failed"; ls -la "$TOOLS_DIR"; exit 1; }
+        [ -f "$TOOLS_DIR/gau" ] && [ -x "$TOOLS_DIR/gau" ] || { echo "ERROR: gau check failed"; ls -la "$TOOLS_DIR"; exit 1; }
+        [ -f "$TOOLS_DIR/httpx" ] && [ -x "$TOOLS_DIR/httpx" ] || { echo "ERROR: httpx check failed"; ls -la "$TOOLS_DIR"; exit 1; }
         
-        echo "All tools downloaded successfully!"
-        /tmp/tools/waybackurls --version || true
-        /tmp/tools/gau --version || true
-        /tmp/tools/httpx -version || true
+        echo "All tools verified!"
+        echo "TOOLS_DIR=$TOOLS_DIR" >> $GITHUB_ENV
 
     - name: Collect OLD URLs (Wayback + GAU)
       run: |
         set -e
         mkdir -p data
         
-        # Verify tools exist before using
-        [ -f /tmp/tools/waybackurls ] && [ -x /tmp/tools/waybackurls ] || { echo "ERROR: waybackurls not found!"; ls -la /tmp/tools/; exit 1; }
-        [ -f /tmp/tools/gau ] && [ -x /tmp/tools/gau ] || { echo "ERROR: gau not found!"; ls -la /tmp/tools/; exit 1; }
+        TOOLS_DIR="${TOOLS_DIR:-$HOME/tools}"
+        WAYBACK="$TOOLS_DIR/waybackurls"
+        GAU="$TOOLS_DIR/gau"
         
-        echo "Using waybackurls: /tmp/tools/waybackurls"
-        echo "Using gau: /tmp/tools/gau"
+        echo "Tools directory: $TOOLS_DIR"
+        echo "Looking for waybackurls at: $WAYBACK"
+        echo "Looking for gau at: $GAU"
         
-        echo "zerobounce.net" | /tmp/tools/waybackurls > data/all.txt || { echo "waybackurls failed"; exit 1; }
-        /tmp/tools/gau zerobounce.net >> data/all.txt || { echo "gau failed"; exit 1; }
+        # Verify tools exist
+        if [ ! -f "$WAYBACK" ] || [ ! -x "$WAYBACK" ]; then
+          echo "ERROR: waybackurls not found at $WAYBACK"
+          ls -la "$TOOLS_DIR" 2>/dev/null || echo "Directory doesn't exist"
+          find "$HOME" -name "waybackurls" 2>/dev/null || echo "waybackurls not found anywhere"
+          exit 1
+        fi
+        
+        if [ ! -f "$GAU" ] || [ ! -x "$GAU" ]; then
+          echo "ERROR: gau not found at $GAU"
+          ls -la "$TOOLS_DIR" 2>/dev/null || echo "Directory doesn't exist"
+          exit 1
+        fi
+        
+        echo "Using waybackurls: $WAYBACK"
+        echo "Using gau: $GAU"
+        
+        echo "zerobounce.net" | "$WAYBACK" > data/all.txt || { echo "waybackurls command failed"; exit 1; }
+        "$GAU" zerobounce.net >> data/all.txt || { echo "gau command failed"; exit 1; }
         sort -u data/all.txt > data/urls.txt
 
     - name: Filter API & sensitive endpoints
@@ -84,11 +105,21 @@ jobs:
     - name: Alive check with httpx
       run: |
         set -e
-        # Verify httpx exists
-        [ -f /tmp/tools/httpx ] && [ -x /tmp/tools/httpx ] || { echo "ERROR: httpx not found!"; ls -la /tmp/tools/; exit 1; }
+        TOOLS_DIR="${TOOLS_DIR:-$HOME/tools}"
+        HTTPX="$TOOLS_DIR/httpx"
+        
+        echo "Looking for httpx at: $HTTPX"
+        
+        if [ ! -f "$HTTPX" ] || [ ! -x "$HTTPX" ]; then
+          echo "ERROR: httpx not found at $HTTPX"
+          ls -la "$TOOLS_DIR" 2>/dev/null || echo "Directory doesn't exist"
+          exit 1
+        fi
+        
+        echo "Using httpx: $HTTPX"
         
         if [ -s data/api.txt ]; then
-          cat data/api.txt | /tmp/tools/httpx -silent -mc 200,401,403 > data/alive.txt || true
+          cat data/api.txt | "$HTTPX" -silent -mc 200,401,403 > data/alive.txt || true
         else
           touch data/alive.txt
         fi
