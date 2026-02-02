@@ -17,26 +17,29 @@ jobs:
       run: |
         echo "Updating package list and installing Go..."
         sudo apt update
-        sudo apt install -y golang
+        sudo apt install -y golang-go
         echo "Go installed: $(go version)"
         
-        # Manually check Go path
-        echo "Go Bin Path: $GOPATH/bin"
-        echo "Go Home Path: $HOME/go"
-        
-        # Set PATH for Go tools
-        echo "$HOME/go/bin" >> $GITHUB_PATH
-        echo "Updated $GITHUB_PATH: $HOME/go/bin"
+        # Get Go bin path and add to PATH for this and future steps
+        GO_BIN_PATH=$(go env GOPATH)/bin
+        if [ -z "$GO_BIN_PATH" ] || [ "$GO_BIN_PATH" = "/bin" ]; then
+          GO_BIN_PATH="$HOME/go/bin"
+        fi
+        echo "$GO_BIN_PATH" >> $GITHUB_PATH
+        export PATH=$PATH:$GO_BIN_PATH
+        echo "Go bin path: $GO_BIN_PATH"
 
         # Install the tools
         go install github.com/tomnomnom/waybackurls@latest
         go install github.com/lc/gau/v2/cmd/gau@latest
         go install github.com/projectdiscovery/httpx/cmd/httpx@latest
         
-        # Check if the tools are installed
-        echo "waybackurls installed: $(which waybackurls)"
-        echo "gau installed: $(which gau)"
-        echo "httpx installed: $(which httpx)"
+        # Verify installation
+        echo "Verifying installations..."
+        ls -la $GO_BIN_PATH/ | grep -E "waybackurls|gau|httpx" || true
+        waybackurls --version || echo "waybackurls version check"
+        gau --version || echo "gau version check"
+        httpx -version || echo "httpx version check"
 
     - name: Collect OLD URLs (Wayback + GAU)
       run: |
@@ -51,7 +54,11 @@ jobs:
 
     - name: Alive check with httpx
       run: |
-        cat data/api.txt | httpx -silent -mc 200,401,403 > data/alive.txt || true
+        if [ -s data/api.txt ]; then
+          cat data/api.txt | httpx -silent -mc 200,401,403 > data/alive.txt || true
+        else
+          touch data/alive.txt
+        fi
 
     - name: Compare with OLD data
       run: |
