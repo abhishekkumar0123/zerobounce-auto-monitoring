@@ -24,25 +24,19 @@ jobs:
         echo "Go Bin Path: $GOPATH/bin"
         echo "Go Home Path: $HOME/go"
         
-        # Install tools and confirm path
-        go install github.com/tomnomnom/waybackurls@latest
-        echo "waybackurls installed: $(which waybackurls)"
-        
-        go install github.com/lc/gau/v2/cmd/gau@latest
-        echo "gau installed: $(which gau)"
-        
-        go install github.com/projectdiscovery/httpx/cmd/httpx@latest
-        echo "httpx installed: $(which httpx)"
-        
+        # Set PATH for Go tools
         echo "$HOME/go/bin" >> $GITHUB_PATH
         echo "Updated $GITHUB_PATH: $HOME/go/bin"
+
+        # Install the tools
+        go install github.com/tomnomnom/waybackurls@latest
+        go install github.com/lc/gau/v2/cmd/gau@latest
+        go install github.com/projectdiscovery/httpx/cmd/httpx@latest
         
-    - name: Verify Tools Installation
-      run: |
-        # Yeh check karega ki tools install ho gaye hain ya nahi
-        which waybackurls || exit 1
-        which gau || exit 1
-        which httpx || exit 1
+        # Check if the tools are installed
+        echo "waybackurls installed: $(which waybackurls)"
+        echo "gau installed: $(which gau)"
+        echo "httpx installed: $(which httpx)"
 
     - name: Collect OLD URLs (Wayback + GAU)
       run: |
@@ -87,7 +81,3 @@ jobs:
         git add data/old_alive.txt
         git commit -m "update zerobounce old api history" || true
         git push
-
-
-
-
