@@ -22,6 +22,13 @@ jobs:
         go install github.com/projectdiscovery/httpx/cmd/httpx@latest
         echo "$HOME/go/bin" >> $GITHUB_PATH
 
+    - name: Verify Tools Installation
+      run: |
+        # Yeh check karega ki tools install ho gaye hain ya nahi
+        which waybackurls || exit 1
+        which gau || exit 1
+        which httpx || exit 1
+
     - name: Collect OLD URLs (Wayback + GAU)
       run: |
         mkdir -p data
@@ -31,7 +38,7 @@ jobs:
 
     - name: Filter API & sensitive endpoints
       run: |
-        grep -Ei "/api|/v1|/v2|/admin|/internal|/auth|/login|/reset|token" data/urls.txt > data/api.txt || true
+        grep -Ei "/api|/v1|/v2|/admin|/internal|/auth|/login|reset|token" data/urls.txt > data/api.txt || true
 
     - name: Alive check with httpx
       run: |
@@ -65,4 +72,5 @@ jobs:
         git add data/old_alive.txt
         git commit -m "update zerobounce old api history" || true
         git push
+
 
