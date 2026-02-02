@@ -13,13 +13,18 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v4
 
-    - name: Install tools
+    - name: Install Go and Tools
       run: |
-        echo "Installing tools..."
+        echo "Updating package list and installing Go..."
         sudo apt update
         sudo apt install -y golang
         echo "Go installed: $(go version)"
         
+        # Manually check Go path
+        echo "Go Bin Path: $GOPATH/bin"
+        echo "Go Home Path: $HOME/go"
+        
+        # Install tools and confirm path
         go install github.com/tomnomnom/waybackurls@latest
         echo "waybackurls installed: $(which waybackurls)"
         
@@ -30,7 +35,8 @@ jobs:
         echo "httpx installed: $(which httpx)"
         
         echo "$HOME/go/bin" >> $GITHUB_PATH
-
+        echo "Updated $GITHUB_PATH: $HOME/go/bin"
+        
     - name: Verify Tools Installation
       run: |
         # Yeh check karega ki tools install ho gaye hain ya nahi
@@ -81,6 +87,7 @@ jobs:
         git add data/old_alive.txt
         git commit -m "update zerobounce old api history" || true
         git push
+
 
 
 
