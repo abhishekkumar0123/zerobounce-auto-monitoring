@@ -1,8 +1,8 @@
-name: Zerobounce-Auto-Monitoring
+name: Auto-Monitoring
 
 on:
   schedule:
-    - cron: "0 * * * *"   # har 1 ghante
+    - cron: "0 * * * *"   # runs every hour
   workflow_dispatch:
 
 jobs:
@@ -33,7 +33,7 @@ jobs:
       run: |
         httpx -l targets.txt -silent > new/httpx_new.txt || true
 
-    # 🧪 nuclei templates (sirf safe)
+    # 🧪 nuclei templates (safe scan)
     - name: nuclei scan
       run: |
         nuclei -l new/httpx_new.txt -severity low,medium,high,critical -silent > new/nuclei_new.txt || true
@@ -56,7 +56,7 @@ jobs:
         diff_js=$(diff data/js_old.txt new/js_new.txt || true)
 
         if [ -n "$diff_httpx$diff_nuclei$diff_js" ]; then
-          MSG="🚨 Zerobounce Change Detected 🚨%0A"
+          MSG="🚨 Auto Monitoring Change Detected 🚨%0A"
 
           [ -n "$diff_httpx" ] && MSG="${MSG}%0A🌐 New/Changed Endpoints"
           [ -n "$diff_nuclei" ] && MSG="${MSG}%0A🧪 New Nuclei Findings"
@@ -78,3 +78,4 @@ jobs:
         git add data/*
         git commit -m "auto: update monitoring data" || echo "No changes"
         git push
+
