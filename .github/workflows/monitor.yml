@@ -1,4 +1,4 @@
-name: Zerobounce Auto Monitoring
+name: Zerobounce-Auto-Monitoring
 
 on:
   schedule:
